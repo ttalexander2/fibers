@@ -2,26 +2,34 @@
 #define FIBERS_FIBERS_H
 
 #include "fiber_manager.h"
-#include "job.h"
+#include "job_handle.h"
 #include "lambda_type_deduction.h"
 
 namespace fibers
 {
+    /// @brief Function to initialize the fibers system. Should be called only once in the application lifetime,
+    /// and before the use of the job system.
+    /// \tparam Allocator Memory allocator for fiber stack_space. Default uses a free_list_allocator, which preallocates
+    /// memory on the heap. Allocations for stack space occur immediately before job execution, so
+    /// any provided allocator should take into account the constant allocation/deallocation.
+    /// \param fibers Number of fibers to create.
+    /// \param stack_size Size in bytes for a fiber's stack.
+    template <typename Allocator = free_list_allocator>
     inline void initialize(size_t fibers = 200, size_t stack_size = 4096)
     {
-        fiber_manager::instance().initialize(fibers, stack_size);
+        fiber_manager::instance().initialize<Allocator>(fibers, stack_size);
     }
 
-    /// @brief Queues a job to run on a fiber, from a standard function.
+    /// @brief Queues a job_handle to run on a fiber, from a standard function.
     template <typename Ret, typename... Args>
-    inline job&& queue_job(std::function<Ret(Args...)> function, Args... args)
+    inline job_handle&& queue_job(std::function<Ret(Args...)> function, Args... args)
     {
         return fiber_manager::instance().queue_job(function, std::forward<Args>(args)...);
     }
 
-    /// @brief Queues a job to run on a fiber, from a lambda function.
+    /// @brief Queues a job_handle to run on a fiber, from a lambda function.
     template <typename Func, typename... Args, typename Ret = std::result_of_t<Func&&(Args&&...)>>
-    inline job&& queue_job(Func&& f, Args... args)
+    inline job_handle&& queue_job(Func&& f, Args... args)
     {
         return fiber_manager::instance().queue_job(FFL(f), std::forward<Args>(args)...);
     }

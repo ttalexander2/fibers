@@ -47,10 +47,10 @@ namespace fibers
     // Barrier used for synchronizing the creation of threads and their registration with the fiber manager.
     static barrier thread_registration(std::thread::hardware_concurrency());
 
-    void fiber_manager::initialize(size_t fiber_count_, size_t stack_size_) {
+    void fiber_manager::initialize(size_t fiber_count_, size_t stack_size_, fiber_allocator* allocator) {
         fiber_count = fiber_count_;
         stack_size = stack_size_;
-        stack_allocator = new free_list_allocator(stack_size * fiber_count);
+        stack_allocator = allocator;
         create_threads();
     }
 
@@ -95,15 +95,9 @@ namespace fibers
                 if (!fiber_to_execute->started)
                 {
                     // TODO: Allocate stack
+                    fiber_to_execute
                     // TODO: Create context
                 }
-            }
-
-
-            if (thread->current != nullptr && thread->current->completed)
-            {
-                delete thread->current;
-                thread->current = nullptr;
             }
         }
     }

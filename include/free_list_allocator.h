@@ -1,12 +1,13 @@
 ﻿#pragma once
 #include <tuple>
 #include <cstdint>
+#include "fiber_allocator.h"
 
 using size_t = std::size_t;
 
 namespace fibers
 {
-    class free_list_allocator
+    class free_list_allocator : public fiber_allocator
     {
     public:
         struct header
@@ -24,11 +25,15 @@ namespace fibers
         };
 
         explicit free_list_allocator(size_t size);
-        ~free_list_allocator();
+        ~free_list_allocator() override;
 
-        void* allocate(size_t size, size_t alignment = 16);
-        void deallocate(void* address);
-        void reset();
+        void* allocate(size_t size, size_t alignment) override;
+        void deallocate(void* address) override;
+        void reset() override;
+
+        inline void* allocate(size_t size) {
+            return allocate(size, 16);
+        }
 
     private:
         void initialize();
