@@ -20,26 +20,17 @@ namespace fibers
         return result_exists;
     }
 
-    template <typename T>
-    T job_handle::get_result()
-    {
-        T value;
-        bool result_exists = false;
-        result_lock.lock();
-        result_exists = result != nullptr;
-        if (result_exists)
-            value = *dynamic_cast<T*>(result);
-        result_lock.unlock();
-
-        if (!result_exists)
-            throw std::exception("Result not found! Consider using has_result() or try_get_result().");
-        return value;
-    }
-
     void job_handle::wait_for_completion() {
         while (!has_result())
         {
+            std::cout << "yielding\n";
             fibers::current::yield();
         }
+    }
+
+    void job_handle::set_result(void* newResult) {
+        result_lock.lock();
+        result = newResult;
+        result_lock.unlock();
     }
 }

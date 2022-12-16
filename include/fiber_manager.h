@@ -8,11 +8,11 @@
 #include <future>
 #include <xutility>
 #include <map>
+#include <iostream>
 
 #include "fiber.h"
 #include "free_list_allocator.h"
 #include "job_handle.h"
-#include "third_party/moodycamel/concurrentqueue.h"
 #include "io_operation.h"
 #include "hardware_thread.h"
 #include "primitives/spinlock.h"
@@ -20,6 +20,7 @@
 #include "fiber_thread.h"
 #include "job.h"
 #include "priority.h"
+#include "third_party/moodycamel/concurrentqueue.h"
 
 namespace fibers
 {
@@ -37,7 +38,7 @@ namespace fibers
     public:
 
         // Meyers singleton (guaranteed to be thread-safe by cpp standard)
-        static fiber_manager& instance() {
+        static fiber_manager& instance() noexcept {
             static fiber_manager instance;
             return instance;
         }
@@ -47,7 +48,7 @@ namespace fibers
         {
             static_assert(std::is_base_of_v<fiber_allocator, StackAllocator> && !std::is_abstract_v<StackAllocator>,
                     "Provided allocator does not derive from fiber_allocator!");
-            initialize(num_fibers, fiber_stack_size, new StackAllocator(fiber_stack_size * num_fibers));
+            initialize_impl(num_fibers, fiber_stack_size, new StackAllocator(fiber_stack_size * num_fibers));
 
         }
 
@@ -56,23 +57,29 @@ namespace fibers
 
             job_handle handle{};
 
+            std::cout << "handle before: " << std::hex << &handle << "\n";
+
             // This function moves the promise, function, and argument pack to the lifetime of the lambda function.
             // This allows us to execute this function on a fiber, ensuring required captures
             // remain in scope, as well as ensuring that the requested result is set.
-            auto func = [job_result_ptr = &handle.result,
+            auto func = [job_result = &handle,
                          func = function, args = std::make_tuple(std::forward<Args>(args) ...)]
                     () -> void {
                 return std::apply([&](auto&& ... args) {
+                    std::cout << "Job being executed...\n";
                     void* result = reinterpret_cast<void*>(func(args...));
-                    if (job_result_ptr != nullptr)
+                    std::cout << "handle set: " << std::hex << job_result << "\n";
+                    if (result != nullptr)
                     {
-                        *job_result_ptr = result;
+                        job_result->set_result(result);
                     }
                 }, std::move(args));
             };
 
             // Create fiber and add to the ready queue
             auto* job = new class job(func);
+            job->job_priority = job_priority;
+
             if (job_priority == priority::normal)
             {
                 job_queue_normal_priority.enqueue(job);
@@ -96,25 +103,40 @@ namespace fibers
 
         void yield_current_fiber();
 
-        template <class Rep, class Period>
-        void sleep_current_fiber(const std::chrono::duration<Rep, Period>& duration);
+        template<class Rep, class Period>
+        void sleep_current_fiber(const std::chrono::duration<Rep, Period> &duration) {
+            fiber_thread* thread = get_current_fiber_thread();
+            if (thread == nullptr)
+                return;
+            fiber* fiber_to_yield = thread->current;
+            if (fiber_to_yield != nullptr)
+            {
+                sleep_queue.enqueue(thread->current);
+                thread->current = nullptr;
+            }
+        }
 
 
         fiber_manager(const fiber_manager&)= delete;
         fiber_manager& operator=(const fiber_manager&)= delete;
 
+        void shutdown();
+
     private:
-        fiber_manager() = default;
+        fiber_manager()
+        {
+            std::cout << "created fiber manager\n";
+        }
         ~fiber_manager() {
             shutdown();
         };
 
-        void initialize(size_t fibers, size_t stack_size, fiber_allocator* allocator);
+        void initialize_impl(size_t fibers, size_t stack_size, fiber_allocator* allocator);
 
         static size_t get_this_thread_id();
 
-        void shutdown();
         static void create_threads();
+        void create_fibers();
 
         static void register_fiber_thread(fiber_thread* thread);
 
@@ -122,13 +144,16 @@ namespace fibers
         static void run_sleep_thread(hardware_thread* thread);
         static void run_io_thread(hardware_thread* thread);
 
-        // This function will serve as the entry point for a job_handle. A pointer to this function is what we
-        // will give our context upon initial execution.
-        static void run_fiber(fiber* fiber_to_run);
+        // This is used as the entry point for the fiber.
+        static void fiber_run();
+
 
         static hardware_thread* get_current_thread();
         static fiber_thread* get_current_fiber_thread();
         static fiber* get_current_fiber();
+
+
+        job* get_next_job();
 
     private:
         size_t fiber_count = 0;
@@ -141,7 +166,7 @@ namespace fibers
         // Lock for the stack_allocator. Necessary since multiple fiber execution threads will need to access.
         spinlock allocator_lock;
 
-        std::atomic<bool> threads_registered = false;
+        std::atomic<bool> running = false;
 
         // Map of fiber threads. Used for determining fiber context. Writing locks threads, reading is lock free.
         thread_map threads;
@@ -173,7 +198,6 @@ namespace fibers
         // Consumers: sleep_thread (Sleep management thread).
         queue<fiber*> sleep_queue;
 
-
         // Queue of fiber IDs to wake up.
         // Producers: io_thread
         // Consumers: sleep_thread
@@ -183,7 +207,7 @@ namespace fibers
         // This structure is NOT concurrent, only meant to be accessed by the sleep management thread.
         std::vector<fiber*> sleeping_fibers;
 
-
+        // Job queues
         queue<job*> job_queue_low_priority;
         queue<job*> job_queue_normal_priority;
         queue<job*> job_queue_high_priority;

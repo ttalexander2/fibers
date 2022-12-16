@@ -4,6 +4,7 @@
 #define FIBERS_HARDWARE_THREAD_H
 
 #include <thread>
+#include <functional>
 
 namespace fibers
 {
@@ -15,7 +16,11 @@ namespace fibers
         [[nodiscard]] inline size_t get_affinity() const { return thread_affinity;}
 
         template<class Function, class... Args>
-        void start(Function&& f, Args&&... args);
+        void start(Function&& f, Args&&... args)
+        {
+            os_thread = std::thread(std::forward<Function>(f), std::forward<Args>(args)...);
+            set_affinity(thread_affinity);
+        }
 
         std::thread os_thread;
     private:

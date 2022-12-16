@@ -9,12 +9,11 @@ namespace fibers
             if (!lock_.exchange(true, std::memory_order_acquire)) {
                 return;
             }
-            auto result = lock_.load(std::memory_order_relaxed);
-            while (result) {
+            while (lock_.load(std::memory_order_relaxed)) {
                 // normally you would execute a PAUSE instruction in a normal spin-lock
                 // however, since this will be used with fibers, we want to avoid PAUSE
                 // as it will increase latency resulting in performance loss.
-                result = lock_.load(std::memory_order_relaxed);
+                ; // spin
             }
         }
     }
@@ -25,7 +24,7 @@ namespace fibers
     }
 
     void spinlock::unlock() noexcept {
-        lock_.store(false,  std::memory_order_acquire);
+        lock_.store(false,  std::memory_order_release);
     }
 }
 

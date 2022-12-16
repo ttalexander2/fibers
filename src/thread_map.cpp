@@ -25,7 +25,7 @@ namespace fibers
             }
         }
         map_[id] = thread;
-        lock_.store(false,  std::memory_order_acquire);
+        lock_.store(false,  std::memory_order_release);
     }
 
     bool thread_map::try_write(size_t id, fiber_thread* thread) noexcept {
@@ -33,8 +33,10 @@ namespace fibers
             !lock_.exchange(true, std::memory_order_acquire))
         {
             map_[id] = thread;
-            lock_.store(false,  std::memory_order_acquire);
+            lock_.store(false,  std::memory_order_release);
+            return true;
         }
+        return false;
     }
 
     bool thread_map::contains(size_t id) noexcept {
@@ -50,9 +52,11 @@ namespace fibers
     fiber_thread* thread_map::get(size_t id) noexcept {
         for (;;)
         {
+            // Test the lock
             if (lock_.load(std::memory_order_relaxed)) {
                 continue;
             }
+
             if (map_.find(id) == map_.end())
                 return nullptr;
             // We use find() and at() here since the indexing operator[] is considered a write.

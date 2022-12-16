@@ -12,15 +12,16 @@ namespace fibers
 
     free_list_allocator::~free_list_allocator()
     {
-        free(memory_block_);
+        free(reinterpret_cast<void*>(memory_block_));
     }
 
     void free_list_allocator::initialize()
     {
         memory_block_ = reinterpret_cast<uint8_t*>(malloc(size_));
+        reset_impl();
     }
 
-    void* free_list_allocator::allocate(size_t size, size_t alignment /* = 16*/)
+    void* free_list_allocator::allocate_impl(size_t size, size_t alignment /* = 16*/)
     {
         const auto result = find_first_fit(size, alignment);
         node* current_node = std::get<0>(result);
@@ -44,7 +45,7 @@ namespace fibers
         return reinterpret_cast<void*>(header_address + header_size);
     }
 
-    void free_list_allocator::deallocate(void* address)
+    void free_list_allocator::deallocate_impl(void* address)
     {
         const std::size_t current_address = reinterpret_cast<std::size_t>(address);
         const std::size_t header_address = current_address - header_size;
@@ -79,7 +80,7 @@ namespace fibers
         defragment();
     }
 
-    void free_list_allocator::reset()
+    void free_list_allocator::reset_impl()
     {
         node* n = reinterpret_cast<node*>(memory_block_);
         *n = node{ size_, nullptr };

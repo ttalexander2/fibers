@@ -27,6 +27,6 @@ namespace fibers
     }
 
     void mutex::unlock() noexcept {
-        lock_.store(false,  std::memory_order_acquire);
+        lock_.store(false,  std::memory_order_release);
     }
 }

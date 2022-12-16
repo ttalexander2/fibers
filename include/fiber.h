@@ -4,9 +4,12 @@
 
 #include "context.h"
 #include "free_list_allocator.h"
+#include "job.h"
 
 namespace fibers
 {
+    // The fiber class simply represents a stack space and a context.
+    // Additionally, this class is used to hold various information including the current job being executed.
     struct fiber
     {
         friend class fiber_manager;
@@ -22,9 +25,11 @@ namespace fibers
 
         size_t id{};
         context ctx{};
-        std::function<void()> function;
-        bool started = false;
-        bool completed = false;
+        volatile bool started = false;
+        volatile bool completed = false;
+        void* stack = nullptr;
+        context return_ctx{};
+        job* current_job = nullptr;
     };
 }
 

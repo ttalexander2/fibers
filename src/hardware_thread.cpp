@@ -10,13 +10,7 @@ namespace fibers
 
     hardware_thread::hardware_thread(size_t affinity) : thread_affinity(affinity)
     {
-        set_affinity(affinity);
-    }
-
-    template<class Function, class... Args>
-    void hardware_thread::start(Function &&f, Args &&... args) {
-        os_thread = std::thread(std::forward<Function>(f), std::forward<Args>(args)...);
-        set_affinity(thread_affinity);
+        //set_affinity(affinity);
     }
 
     void hardware_thread::set_affinity(size_t affinity) {

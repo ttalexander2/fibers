@@ -3,6 +3,7 @@
 #ifndef FIBERS_JOB_HANDLE_H
 #define FIBERS_JOB_HANDLE_H
 
+#include <exception>
 #include "primitives/mutex.h"
 
 namespace fibers
@@ -22,7 +23,21 @@ namespace fibers
         [[nodiscard]] bool has_result() noexcept;
 
         template <typename T>
-        T get_result();
+        T get_result()
+        {
+            T value;
+            bool result_exists = false;
+            result_lock.lock();
+            result_exists = result != nullptr;
+            if (result_exists)
+                value = *static_cast<T*>(result);
+            result_lock.unlock();
+
+            if (!result_exists) {
+                throw std::exception("Result not found! Consider using has_result() or try_get_result().");
+            }
+            return value;
+        }
 
         void wait_for_completion();
 
@@ -32,6 +47,9 @@ namespace fibers
 
     private:
         job_handle();
+
+         void set_result(void* result);
+
         size_t job_id = 0;
 
         // Mutex for setting/accessing the result

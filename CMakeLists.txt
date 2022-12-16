@@ -3,7 +3,7 @@ project(fibers
         VERSION 0.1.0
         DESCRIPTION "Lightweight fibers library")
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 add_library(${PROJECT_NAME} STATIC)
 

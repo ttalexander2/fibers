@@ -27,13 +27,10 @@ namespace fibers
         explicit free_list_allocator(size_t size);
         ~free_list_allocator() override;
 
-        void* allocate(size_t size, size_t alignment) override;
-        void deallocate(void* address) override;
-        void reset() override;
-
-        inline void* allocate(size_t size) {
-            return allocate(size, 16);
-        }
+    protected:
+        void* allocate_impl(size_t size, size_t alignment) override;
+        void deallocate_impl(void* address) override;
+        void reset_impl() override;
 
     private:
         void initialize();

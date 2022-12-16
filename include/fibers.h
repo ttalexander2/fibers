@@ -1,9 +1,13 @@
+#pragma once
+
 #ifndef FIBERS_FIBERS_H
 #define FIBERS_FIBERS_H
 
 #include "fiber_manager.h"
 #include "job_handle.h"
 #include "lambda_type_deduction.h"
+#include "fiber_allocator.h"
+#include "job_handle.h"
 
 namespace fibers
 {
@@ -20,6 +24,12 @@ namespace fibers
         fiber_manager::instance().initialize<Allocator>(fibers, stack_size);
     }
 
+
+    inline void shutdown()
+    {
+        fiber_manager::instance().shutdown();
+    }
+
     /// @brief Queues a job_handle to run on a fiber, from a standard function.
     template <typename Ret, typename... Args>
     inline job_handle&& queue_job(std::function<Ret(Args...)> function, Args... args)
@@ -28,7 +38,7 @@ namespace fibers
     }
 
     /// @brief Queues a job_handle to run on a fiber, from a lambda function.
-    template <typename Func, typename... Args, typename Ret = std::result_of_t<Func&&(Args&&...)>>
+    template <typename Func, typename... Args, typename Ret = std::invoke_result_t<Func&&(Args&&...)>>
     inline job_handle&& queue_job(Func&& f, Args... args)
     {
         return fiber_manager::instance().queue_job(FFL(f), std::forward<Args>(args)...);
@@ -44,7 +54,7 @@ namespace fibers
 
     /// @brief Queues an IO operation to run on the IO thread.
     /// Fiber yields until corresponding IO operation is complete.
-    template <typename Func, typename... Args, typename Ret = std::result_of_t<Func&&(Args&&...)>>
+    template <typename Func, typename... Args, typename Ret = std::invoke_result_t<Func&&(Args&&...)>>
     inline void yield_io(Func&& f, Args... args)
     {
 
@@ -66,7 +76,10 @@ namespace fibers
         /// to continue immediately, only when it reaches the front of the ready queue, and there exists
         /// an available fiber execution thread.
         template <class Rep, class Period>
-        void sleep(const std::chrono::duration<Rep, Period>& duration);
+        void sleep(const std::chrono::duration<Rep, Period>& duration)
+        {
+
+        }
     }
 
 }

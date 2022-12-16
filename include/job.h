@@ -4,6 +4,7 @@
 #define FIBERS_JOB_H
 
 #include <functional>
+#include "priority.h"
 
 namespace fibers
 {
@@ -13,6 +14,7 @@ namespace fibers
     public:
         explicit job(std::function<void()> f);
         std::function<void()> func;
+        priority job_priority = priority::normal;
     };
 }
 
