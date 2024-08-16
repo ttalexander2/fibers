@@ -11,10 +11,13 @@
 
 namespace fibers
 {
+    class fiber_manager;
     // This class is meant for internal use in the fiber_manager, and should not be used elsewhere.
     // This class holds a map of hardware threads, indexed by their ID.
     // It allows for *inefficient* thread-safe writes, and simultaneous read operations.
     class thread_map {
+        friend class fiber_manager;
+
         std::atomic_bool lock_{false};
         std::map<size_t, fiber_thread*> map_;
 

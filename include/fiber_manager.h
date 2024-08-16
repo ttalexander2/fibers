@@ -6,7 +6,6 @@
 #include <vector>
 #include <mutex>
 #include <future>
-#include <xutility>
 #include <map>
 #include <iostream>
 
@@ -24,7 +23,8 @@
 
 namespace fibers
 {
-    struct job_handle;
+    template<typename ReturnType>
+    class job_handle;
 
     template <typename T>
     using queue = moodycamel::ConcurrentQueue<T>;
@@ -33,7 +33,8 @@ namespace fibers
     // Centralized class for managing the fiber system.
     class fiber_manager
     {
-        friend struct job_handle;
+        template<typename ReturnType>
+        friend class job_handle;
 
     public:
 
@@ -53,26 +54,22 @@ namespace fibers
         }
 
         template<typename Ret, typename... Args>
-        job_handle&& queue_job(std::function<Ret(Args...)> function, Args... args, priority job_priority = priority::normal) {
+        job_handle<Ret>* queue_job(std::function<Ret(Args...)> function, Args... args, priority job_priority = priority::normal) {
 
-            job_handle handle{};
+            auto* handle = new job_handle<Ret>();
 
-            std::cout << "handle before: " << std::hex << &handle << "\n";
+            //std::cout << "handle before: " << std::hex << handle << "\n";
 
             // This function moves the promise, function, and argument pack to the lifetime of the lambda function.
             // This allows us to execute this function on a fiber, ensuring required captures
             // remain in scope, as well as ensuring that the requested result is set.
-            auto func = [job_result = &handle,
+            auto func = [job_result = handle,
                          func = function, args = std::make_tuple(std::forward<Args>(args) ...)]
                     () -> void {
                 return std::apply([&](auto&& ... args) {
                     std::cout << "Job being executed...\n";
-                    void* result = reinterpret_cast<void*>(func(args...));
-                    std::cout << "handle set: " << std::hex << job_result << "\n";
-                    if (result != nullptr)
-                    {
-                        job_result->set_result(result);
-                    }
+                    Ret result = func(args...);
+                    job_result->set_result(std::move(result));
                 }, std::move(args));
             };
 
@@ -98,7 +95,7 @@ namespace fibers
             }
 
 
-            return std::move(handle);
+            return handle;
         }
 
         void yield_current_fiber();
@@ -164,12 +161,12 @@ namespace fibers
         fiber_allocator* stack_allocator{};
 
         // Lock for the stack_allocator. Necessary since multiple fiber execution threads will need to access.
-        spinlock allocator_lock;
+        spinlock allocator_lock{};
 
         std::atomic<bool> running = false;
 
         // Map of fiber threads. Used for determining fiber context. Writing locks threads, reading is lock free.
-        thread_map threads;
+        thread_map threads{};
 
         // Thead for handling sleep operations.
         hardware_thread* sleep_thread = nullptr;
@@ -186,12 +183,12 @@ namespace fibers
         // Queue of fibers ready to be executed on any thread
         // Producers: Any thread.
         // Consumers: Any hardware_thread.
-        queue<fiber*> ready_queue;
+        queue<fiber*> ready_queue{};
 
         // Queue of io_operations to be performed by the IO thread
         // Producers: Any hardware_thread.
         // Consumers: io_thread.
-        queue<io_operation> io_queue;
+        queue<io_operation> io_queue{};
 
         // Queue of fibers requesting to be put to sleep.
         // Producers: Any hardware_thread.
@@ -201,11 +198,11 @@ namespace fibers
         // Queue of fiber IDs to wake up.
         // Producers: io_thread
         // Consumers: sleep_thread
-        queue<size_t> wake_queue;
+        queue<size_t> wake_queue{};
 
         // List of currently sleeping fibers.
         // This structure is NOT concurrent, only meant to be accessed by the sleep management thread.
-        std::vector<fiber*> sleeping_fibers;
+        std::vector<fiber*> sleeping_fibers{};
 
         // Job queues
         queue<job*> job_queue_low_priority;

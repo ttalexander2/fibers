@@ -9,6 +9,7 @@
 #endif
 
 #include <chrono>
+#include <ranges>
 using namespace std::chrono_literals;
 
 namespace fibers
@@ -49,6 +50,7 @@ namespace fibers
 
     // Barrier used for synchronizing the creation of threads and their registration with the fiber manager.
     static barrier thread_registration(std::thread::hardware_concurrency());
+    static barrier thread_cleanup(std::thread::hardware_concurrency() + 1);
 
     void fiber_manager::initialize_impl(size_t fiber_count_, size_t stack_size_, fiber_allocator* allocator) {
         fiber_count = fiber_count_;
@@ -62,11 +64,23 @@ namespace fibers
     void fiber_manager::shutdown()
     {
         running = false;
+        thread_cleanup.wait();
+
+        for (const auto thread: threads.map_ | std::views::values) {
+            thread->os_thread.join();
+        }
+        sleep_thread->os_thread.join();
+        io_thread->os_thread.join();
+
+        instance().allocator_lock.lock();
         if (stack_allocator != nullptr)
         {
-            delete stack_allocator;
-            stack_allocator = nullptr;
+            //delete stack_allocator;
+            //stack_allocator = nullptr;
         }
+        instance().allocator_lock.unlock();
+
+        std::cout << "cleaning up memory\n";
 
     }
 
@@ -102,7 +116,8 @@ namespace fibers
     void fiber_manager::run_fiber_thread(fiber_thread* thread) {
         register_fiber_thread(thread);
 
-        size_t s_stack_size = instance().stack_size;
+        const size_t s_stack_size = instance().stack_size;
+        std::cout << "Running fiber thread " << thread->os_thread.get_id() << "(" << thread->get_affinity() <<")" << ", stack_size: " << s_stack_size << "\n";
 
         while(instance().running)
         {
@@ -118,7 +133,9 @@ namespace fibers
                 {
                     // Cleanup fiber from previous execution
                     if (fiber_to_execute->stack != nullptr){
+                        instance().allocator_lock.lock();
                         instance().stack_allocator->deallocate(fiber_to_execute->stack);
+                        instance().allocator_lock.unlock();
                         fiber_to_execute->stack = nullptr;
                         fiber_to_execute->ctx = context{};
                         fiber_to_execute->return_ctx = context{};
@@ -132,12 +149,19 @@ namespace fibers
                     while (next_job == nullptr)
                     {
                         next_job = instance().get_next_job();
+                        if (!instance().running)
+                            break;
                     }
+
+                    if (!instance().running)
+                        break;
 
                     fiber_to_execute->current_job = next_job;
 
                     // Allocate the stack
+                    instance().allocator_lock.lock();
                     fiber_to_execute->stack = instance().stack_allocator->allocate(s_stack_size);
+                    instance().allocator_lock.unlock();
 
                     // Set stack pointer and execution function
                     fiber_to_execute->ctx.rsp = fiber_to_execute->stack;
@@ -171,12 +195,12 @@ namespace fibers
                     {
                         fibers::set_context(&fiber_to_execute->ctx);
                     }
-                    continue;
                 }
             }
         }
 
         std::cout << "fiber thread stopped\n";
+        thread_cleanup.wait();
     }
 
     void fiber_manager::run_sleep_thread(hardware_thread* thread) {
@@ -189,7 +213,9 @@ namespace fibers
             std::this_thread::sleep_for(0.2s);
         }
 
+
         std::cout << "sleep thread stopped\n";
+        thread_cleanup.wait();
 
     }
 
@@ -200,10 +226,15 @@ namespace fibers
 
         while(instance().running)
         {
-            std::this_thread::sleep_for(0.2s);
+            std::this_thread::sleep_for(0.02s);
+            io_operation op{};
+            if (instance().io_queue.try_dequeue(op)) {
+                //op();
+            }
         }
 
         std::cout << "io thread stopped\n";
+        thread_cleanup.wait();
     }
 
     void fiber_manager::register_fiber_thread(fiber_thread* thread) {

@@ -1,6 +1,8 @@
 ﻿#include <cstdlib>
 #include "../include/free_list_allocator.h"
 
+#include <iostream>
+
 
 namespace fibers
 {
@@ -12,12 +14,15 @@ namespace fibers
 
     free_list_allocator::~free_list_allocator()
     {
-        free(reinterpret_cast<void*>(memory_block_));
+        std::cout << "destroying free list allocator\n";
+        //std::cout << std::hex << memory_block_ << "\n" << std::defaultfloat;
+        free(memory_block_);
     }
 
     void free_list_allocator::initialize()
     {
-        memory_block_ = reinterpret_cast<uint8_t*>(malloc(size_));
+        memory_block_ = malloc(size_);
+        //std::cout << std::hex << memory_block_ << "\n" << std::defaultfloat;
         reset_impl();
     }
 

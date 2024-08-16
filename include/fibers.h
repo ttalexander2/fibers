@@ -32,14 +32,14 @@ namespace fibers
 
     /// @brief Queues a job_handle to run on a fiber, from a standard function.
     template <typename Ret, typename... Args>
-    inline job_handle&& queue_job(std::function<Ret(Args...)> function, Args... args)
+    inline job_handle<Ret>* queue_job(std::function<Ret(Args...)> function, Args... args)
     {
         return fiber_manager::instance().queue_job(function, std::forward<Args>(args)...);
     }
 
     /// @brief Queues a job_handle to run on a fiber, from a lambda function.
-    template <typename Func, typename... Args, typename Ret = std::invoke_result_t<Func&&(Args&&...)>>
-    inline job_handle&& queue_job(Func&& f, Args... args)
+    template <typename Func, typename... Args, typename Ret = std::invoke_result_t<Func, Args...>>
+    inline job_handle<Ret>* queue_job(Func&& f, Args... args)
     {
         return fiber_manager::instance().queue_job(FFL(f), std::forward<Args>(args)...);
     }
@@ -57,7 +57,7 @@ namespace fibers
     template <typename Func, typename... Args, typename Ret = std::invoke_result_t<Func&&(Args&&...)>>
     inline void yield_io(Func&& f, Args... args)
     {
-
+        //fiber_manager::instance().io
     }
 
     //bool is_currently_a_fiber();
